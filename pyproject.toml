@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cardforge"
+version = "0.1.0"
+description = "Framework for rapid prototyping of Telegram card-collecting bots"
+readme = "README.md"
+authors = [
+  { name = "CardForge Authors" }
+]
+requires-python = ">=3.11"
+dependencies = [
+  "aiogram>=3.4",
+  "sqlalchemy>=2.0",
+  "pydantic>=2.4",
+  "python-dotenv>=1.0",
+  "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4", "pytest-asyncio>=0.21", "faker>=19.0"]
+
+[project.scripts]
+cardforge-sim = "cardforge.cli:run_simulator"
+cardforge-check = "cardforge.cli:run_checklist"
+cardforge-validate = "cardforge.cli:run_validate"
+cardforge-studio = "cardforge.studio:run_studio"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

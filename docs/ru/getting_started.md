@@ -1,0 +1,255 @@
+# Быстрый старт с CardForge
+
+CardForge упрощает создание карточных Telegram-ботов: вы описываете каталоги в JSON, настраиваете экономику и получаете готовые aiogram-роутеры, админ-инструменты и мини-игры.
+
+---
+
+## 1. Установка
+```bash
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+pip install -e .[dev]
+```
+
+---
+
+## 2. Быстрая инициализация
+```python
+from pathlib import Path
+from aiogram import Bot, Dispatcher
+from cardforge import BotApp, CardForgeConfig
+from cardforge.loaders import load_catalog_from_json
+from cardforge.telegram import build_router
+from cardforge.admin import build_admin_router
+
+config = CardForgeConfig.from_env()
+app = BotApp(config)
+load_catalog_from_json(app, Path("catalog/cards.json"))
+
+bot = Bot(app.config.bot_token)
+dp = Dispatcher()
+dp.include_router(build_router(app, default_pack="starters"))
+dp.include_router(build_admin_router(app))
+```
+
+---
+
+## 3. JSON-формат каталогов
+
+```json
+{
+  "currencies": [
+    {"code": "coins", "name": "Coins"},
+    {"code": "gems",  "name": "Gems"}
+  ],
+  "cards": [
+    {
+      "id": "warrior",
+      "name": "Воин",
+      "description": "Классический герой ближнего боя.",
+      "rarity": "common",
+      "maxCopies": 5,
+      "weight": 0.6,
+      "tags": ["starter"],
+      "image": {
+        "url": "https://example.com/warrior.png",
+        "caption": "Иллюстрация воина"
+      },
+      "reward": {
+        "currencies": {"coins": 5},
+        "experience": 3
+      }
+    }
+  ],
+  "packs": [
+    {
+      "id": "starters",
+      "name": "Стартовый набор",
+      "cards": ["warrior", "mage"],
+      "allowDuplicates": true,
+      "maxPerRoll": 1,
+      "cardWeights": {
+        "warrior": 1.0,
+        "mage": 2.0
+      },
+      "rarityWeights": {
+        "rare": 4.0,
+        "common": 0.5
+      }
+    }
+  ]
+}
+```
+
+| Поле                  | Назначение                                                                               |
+|-----------------------|------------------------------------------------------------------------------------------|
+| `weight`              | Базовый вес выпадения конкретной карты (по умолчанию 1.0).                               |
+| `cardWeights`         | Переопределение весов внутри пака по идентификаторам карт.                               |
+| `rarityWeights`       | Весы по редкостям внутри пака.                                                           |
+| `maxCopies`           | Максимальное количество копий у игрока (дубликаты после лимита обрабатываются стратегией). |
+| `image.url/caption`   | Опциональные медиа-данные (из интернета).                                                |
+| `image.local`         | Путь к локальному файлу, который будет скопирован в проект при сохранении.              |
+
+---
+
+## 4. Настройка выпадения
+
+### 4.1 Глобальные параметры
+```python
+from cardforge.config import CardForgeConfig, DropConfig
+
+config = CardForgeConfig(
+    bot_token="TOKEN",
+    drop=DropConfig(
+        base_cooldown_seconds=1800,
+        allow_duplicates=True,
+        duplicate_penalty=0.25,
+        max_cards_per_drop=2,
+        rarity_weights={
+            "legendary": 0.2,
+            "epic": 0.8,
+            "rare": 1.5,
+            "common": 1.0,
+        },
+    ),
+)
+app = BotApp(config)
+```
+
+Через окружение:
+```
+CARDFORGE_DROP_BASE_COOLDOWN=1800
+CARDFORGE_DROP_ALLOW_DUPLICATES=true
+CARDFORGE_DROP_DUPLICATE_PENALTY=0.25
+CARDFORGE_DROP_MAX_CARDS=2
+CARDFORGE_DROP_RARITY_WEIGHTS={"legendary":0.2,"epic":0.8,"rare":1.5,"common":1.0}
+```
+
+Вес карточки вычисляется по приоритетам:
+1. `pack.cardWeights`
+2. `card.weight`
+3. `pack.rarityWeights`
+4. `config.drop.rarity_weights`
+5. значение по умолчанию (1.0)
+
+### 4.2 Обработка дубликатов
+CardForge использует стратегию дубликатов. По умолчанию — `PenaltyDuplicateStrategy`, которая умножает награду карты на `duplicate_penalty`. Можно подключить свои стратегии:
+
+```python
+from cardforge.domain import DustDuplicateStrategy
+from cardforge.domain.economy import Currency
+
+config = CardForgeConfig(bot_token="TOKEN")
+app = BotApp(
+    config,
+    duplicate_strategy=DustDuplicateStrategy(currency="dust", amount=5),
+)
+app.currencies.currency(Currency(code="dust", name="Dust"))
+```
+
+Встроенные стратегии:
+- `PenaltyDuplicateStrategy` — использовать `duplicate_penalty`.
+- `DustDuplicateStrategy(currency, amount)` — конвертация дубликата в фиксированную валюту.
+Вы можете реализовать собственную стратегию, унаследовав `DuplicateStrategy`.
+
+---
+
+## 5. Мини-игры
+
+`MiniGameRegistry` позволяет регистрировать интерактивные игры. Команда `/games` показывает список доступных игр. Контекст мини-игры (`TelegramMiniGameContext`) предоставляет:
+- `send_message(text)`
+- `award_currency(currency, amount)`
+- `spend_currency(currency, amount)`
+- `grant_card(card_id, quantity)`
+- `grant_experience(amount)`
+- `get_profile()`
+- `send_dice(emoji="🎲")` и `roll_dice(emoji="🎲")` — отправка кубика в Telegram и чтение результата.
+
+```python
+from cardforge.registry import MiniGame
+from cardforge.telegram import TelegramMiniGameContext
+
+async def coinflip(context: TelegramMiniGameContext):
+    await context.send_message("🪙 Подбрасываю монетку...")
+    if random.random() < 0.5:
+        await context.award_currency("coins", 10)
+        await context.grant_experience(5)
+        await context.send_message("Орёл! Ты получил награды.")
+    else:
+        await context.send_message("Решка! Попробуй ещё раз.")
+
+app.mini_games.register(
+    MiniGame(
+        game_id="coinflip",
+        name="Монетка",
+        description="Испытай удачу и заработай монеты.",
+        command="coinflip",
+        aliases=("cf",),
+        handler=coinflip,
+    )
+)
+```
+
+---
+
+## 6. Кастомизация админ-команд
+`AdminCommandConfig` позволяет переименовать команды без переписывания хендлеров:
+
+```python
+config = CardForgeConfig.from_env()
+config.admin.commands = config.admin.commands.__class__(
+    ban="block",
+    unban="unblock",
+    grant_card="giftcard",
+    grant_currency="boost",
+)
+app = BotApp(config)
+```
+
+Команды можно задавать через переменные окружения (`CARDFORGE_ADMIN_CMD_*`).
+
+---
+
+## 7. Диагностика и разработка
+
+| Утилита                    | Назначение                                           |
+|----------------------------|------------------------------------------------------|
+| `cardforge-sim`            | Monte-Carlo симуляция выпадений для оценки экономики |
+| `cardforge-check`          | Чек-лист баланса (пустые паки, перекос опыта и т.д.) |
+| `cardforge-studio`         | Интерактивный мастер для создания каталогов и настроек |
+| `cardforge-validate --catalog catalog/cards.json` | Валидатор JSON каталога перед загрузкой |
+| `cardforge-validate --module examples.basic_bot` | Проверяет конфигурацию бота после регистрации |
+| `pytest`                   | Запуск тестов (поставляется готовый набор примеров)  |
+| `cardforge.testing`        | Фабрики и тест-клиент для сценариев                  |
+
+Пример теста:
+```python
+async def test_weighted_drop_prefers_rare(app):
+    outcome = await app.inventory_service.drop_from_pack(1, "weighted")
+    assert outcome.cards[0].rarity == Rarity.RARE
+```
+
+---
+
+## 8. Полезные переменные окружения
+
+| Переменная                           | Описание                                                     |
+|--------------------------------------|--------------------------------------------------------------|
+| `CARDFORGE_BOT_TOKEN`                | Токен Telegram-бота                                          |
+| `CARDFORGE_STORAGE_BACKEND`         | `memory` \| `sqlalchemy`                                     |
+| `CARDFORGE_STORAGE_DSN`             | DSN для SQLAlchemy                                           |
+| `CARDFORGE_ADMIN_IDS`               | Список ID админов через запятую                              |
+| `CARDFORGE_ADMIN_CMD_*`             | Переименование `/ban`, `/unban`, `/grantcard`, `/grantcurrency` |
+| `CARDFORGE_DROP_*`                  | Настройки дропа (кулдаун, дубликаты, веса)                   |
+| `CARDFORGE_RNG_SEED`                | Фиксированный сид для воспроизводимых выпадений              |
+
+---
+
+## 9. Дальнейшие шаги
+1. Настройте каталог карт в JSON или в коде.
+2. Определите веса выпадений и стратегию обработки дубликатов.
+3. Подключите маршруты `build_router` и `build_admin_router`.
+4. Добавьте мини-игры и собственные команды.
+5. Запустите `pytest` и `cardforge-validate`, чтобы убедиться в корректности экономики и данных.
+
+Готово: фреймворк настроен для гибкой разработки карточного бота. Удачи!

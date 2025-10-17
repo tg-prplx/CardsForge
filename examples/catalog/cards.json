@@ -1,0 +1,62 @@
+{
+  "currencies": [
+    {
+      "code": "coins",
+      "name": "Coins"
+    },
+    {
+      "code": "gems",
+      "name": "Gems"
+    }
+  ],
+  "cards": [
+    {
+      "id": "warrior",
+      "name": "Воин",
+      "description": "Классический герой ближнего боя.",
+      "rarity": "common",
+      "weight": 0.6,
+      "reward": {
+        "currencies": {
+          "coins": 5
+        },
+        "experience": 3
+      },
+      "image": {
+        "url": "https://example.com/images/warrior.png",
+        "caption": "Иллюстрация воина"
+      },
+      "tags": ["starter"]
+    },
+    {
+      "id": "mage",
+      "name": "Маг",
+      "description": "Управляет стихиями и контролирует поле боя.",
+      "rarity": "rare",
+      "weight": 1.4,
+      "reward": {
+        "currencies": {
+          "coins": 12,
+          "gems": 1
+        },
+        "experience": 7
+      },
+      "image": {
+        "url": "https://example.com/images/mage.png"
+      }
+    }
+  ],
+  "packs": [
+    {
+      "id": "starters",
+      "name": "Стартовый набор",
+      "cards": ["warrior", "mage"],
+      "allowDuplicates": false,
+      "maxPerRoll": 1,
+      "cardWeights": {
+        "warrior": 1.0,
+        "mage": 2.0
+      }
+    }
+  ]
+}

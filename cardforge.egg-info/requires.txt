@@ -1,0 +1,9 @@
+aiogram>=3.4
+sqlalchemy>=2.0
+pydantic>=2.4
+python-dotenv>=1.0
+
+[dev]
+pytest>=7.4
+pytest-asyncio>=0.21
+faker>=19.0

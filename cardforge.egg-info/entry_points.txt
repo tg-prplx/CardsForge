@@ -1,0 +1,3 @@
+[console_scripts]
+cardforge-check = cardforge.cli:run_checklist
+cardforge-sim = cardforge.cli:run_simulator

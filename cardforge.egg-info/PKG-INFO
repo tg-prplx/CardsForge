@@ -1,0 +1,89 @@
+Metadata-Version: 2.4
+Name: cardforge
+Version: 0.1.0
+Summary: Framework for rapid prototyping of Telegram card-collecting bots
+Author: CardForge Authors
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: aiogram>=3.4
+Requires-Dist: sqlalchemy>=2.0
+Requires-Dist: pydantic>=2.4
+Requires-Dist: python-dotenv>=1.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.4; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21; extra == "dev"
+Requires-Dist: faker>=19.0; extra == "dev"
+
+# CardForge
+
+CardForge — это фреймворк для быстрого прототипирования и разработки карточных Telegram-ботов. Он предоставляет доменные сущности, хранилища, интеграцию с aiogram, административный инструментарий и утилиты для диагностики экономики.
+
+## Возможности
+- Модульная система карточек, паков, валют и мини-игр.
+- Обработка дропа с учётом кулдаунов, дубликатов и наград.
+- Административные сервисы: бан, выдача карт и валют, корректировка прогресса.
+- Интеграция с aiogram: готовые роутеры, фильтры, клавиатуры.
+- Поддержка in-memory и SQLAlchemy-бэкендов (SQLite по умолчанию).
+- Диагностика экономики: симулятор дропов и чек-лист баланса.
+- Тестовые утилиты: фабрики, фикстуры pytest, тест-клиент.
+
+## Структура проекта
+```
+cardforge/
+  app.py               # Основной класс BotApp
+  config.py            # Конфигурация фреймворка
+  domain/              # Доменные модели и сервисы
+  storage/             # Адаптеры хранилищ
+  telegram/            # Интеграция с aiogram
+  admin/               # Админ-команды и сервисы
+  diagnostics/         # Диагностика экономики
+  testing/             # Утилиты для тестирования
+examples/
+  basic_bot.py         # Пример регистрации бота
+docs/
+  architecture.md      # Описание архитектуры
+```
+
+## Быстрый старт
+1. Установите зависимости:
+   ```bash
+   pip install -e .[dev]
+   ```
+2. Опишите карты и паки в модуле, например `examples/basic_bot.py`.
+3. Запустите симулятор экономики:
+   ```bash
+   cardforge-sim examples.basic_bot starters --pulls 500
+   ```
+4. Проверьте чек-лист баланса:
+   ```bash
+   cardforge-check examples.basic_bot
+   ```
+5. Подключите роутеры в вашем Telegram-боте на aiogram:
+   ```python
+   from aiogram import Bot, Dispatcher
+   from cardforge import BotApp
+   from cardforge.telegram import build_router
+
+   app = BotApp(CardForgeConfig.from_env())
+   register(app)  # ваша регистрация карт/валют
+
+   bot = Bot(app.config.bot_token)
+   dp = Dispatcher()
+   dp.include_router(build_router(app, default_pack="starters"))
+   ```
+
+## Тестирование
+- Запуск всех тестов:
+  ```bash
+  pytest
+  ```
+- Используйте фикстуру `memory_app` или `TestClient` из `cardforge.testing` для сценарного тестирования.
+
+## Диагностика
+- `cardforge-sim` — симуляция выпадения карт и сбор статистики.
+- `cardforge-check` — автоматические проверки на предмет дисбаланса.
+
+## Планы развития
+- Дополнительные транспортные адаптеры (например, Pyrogram).
+- Набор готовых мини-игр и сценариев.
+- Генерация дашбордов с метриками прогресса игроков.
