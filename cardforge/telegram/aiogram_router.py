@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable, Mapping
+from typing import Iterable, Mapping, Sequence
 
 from aiogram import Router
 from aiogram.filters import Command
@@ -13,11 +13,14 @@ from ..domain import PlayerProfile
 from ..domain.cards import Card
 from ..domain.exceptions import CooldownActive, NoCardsAvailable, PlayerBanned
 from ..registry import MiniGame
-from ..telegram.keyboards import card_drop_keyboard
+from ..telegram.keyboards import card_drop_keyboard, welcome_keyboard
 from .minigames import TelegramMiniGameContext
 
 
 def build_router(app: BotApp, *, default_pack: str | None = None) -> Router:
+    resolved_pack = ensure_catalog_ready(app, default_pack)
+    ensure_mini_game_commands(app)
+
     router = Router()
     inventory = app.inventory_service
     players = app.player_service
@@ -25,7 +28,15 @@ def build_router(app: BotApp, *, default_pack: str | None = None) -> Router:
     @router.message(Command("start"))
     async def handle_start(message: Message) -> None:
         await message.answer(
-            "Привет! Я карточный бот на базе CardForge. Используй /drop чтобы получить карты."
+            render_help_message(resolved_pack),
+            reply_markup=welcome_keyboard(resolved_pack),
+        )
+
+    @router.message(Command("help"))
+    async def handle_help(message: Message) -> None:
+        await message.answer(
+            render_help_message(resolved_pack),
+            reply_markup=welcome_keyboard(resolved_pack),
         )
 
     @router.message(Command("packs"))
@@ -41,7 +52,7 @@ def build_router(app: BotApp, *, default_pack: str | None = None) -> Router:
         user = message.from_user
         if not user:
             return
-        pack_id = extract_pack_id(message.text, default_pack, app.cards.catalog.iter_packs())
+        pack_id = extract_pack_id(message.text, resolved_pack, app.cards.catalog.iter_packs())
         if not pack_id:
             await message.answer("Пак не найден. Используй /packs, чтобы узнать доступные пакеты.")
             return
@@ -111,6 +122,14 @@ def build_router(app: BotApp, *, default_pack: str | None = None) -> Router:
             format_collection_message(profile.inventory, app.cards.catalog.iter_cards())
         )
 
+    @router.callback_query(lambda c: c.data == "cardforge:help")
+    async def handle_help_callback(callback: CallbackQuery) -> None:
+        await callback.answer()
+        await callback.message.answer(
+            render_help_message(resolved_pack),
+            reply_markup=welcome_keyboard(resolved_pack),
+        )
+
     @router.message(Command("cooldown"))
     async def handle_cooldown(message: Message) -> None:
         user = message.from_user
@@ -124,26 +143,100 @@ def build_router(app: BotApp, *, default_pack: str | None = None) -> Router:
 
     @router.message(Command("games"))
     async def handle_games(message: Message) -> None:
-        games = app.mini_games.all()
-        if not games:
-            await message.answer("Мини-игры пока не доступны.")
-            return
-        lines = ["🎮 Доступные мини-игры:"]
-        for game in games:
-            cmd = ""
-            if game.command:
-                cmd = f"/{game.command}"
-                if game.aliases:
-                    alias_part = ", ".join(f"/{alias}" for alias in game.aliases)
-                    cmd = f"{cmd} ({alias_part})"
-            lines.append(f"• {game.name}{' — ' + cmd if cmd else ''}")
-            if game.description:
-                lines.append(f"  {game.description}")
-        await message.answer("\n".join(lines))
+        await message.answer(render_games_list(app))
+
+    @router.callback_query(lambda c: c.data == "cardforge:games")
+    async def handle_games_callback(callback: CallbackQuery) -> None:
+        await callback.answer()
+        await callback.message.answer(render_games_list(app))
 
     _register_mini_game_handlers(router, app)
 
     return router
+
+
+def ensure_catalog_ready(app: BotApp, default_pack: str | None) -> str:
+    packs = list(app.cards.catalog.iter_packs())
+    if not packs:
+        raise RuntimeError(
+            "В каталоге нет паков. Используйте app.cards.pack(...) или load_catalog_from_json, чтобы зарегистрировать данные."
+        )
+    pack_ids = {pack.pack_id for pack in packs}
+    if default_pack and default_pack not in pack_ids:
+        raise RuntimeError(
+            f"Пак '{default_pack}' не найден. Доступные паки: {', '.join(sorted(pack_ids))}."
+        )
+    for pack in packs:
+        if not pack.cards:
+            raise RuntimeError(f"Пак '{pack.pack_id}' не содержит карт.")
+        for card_id in pack.cards:
+            try:
+                app.cards.catalog.get_card(card_id)
+            except KeyError as exc:  # noqa: PERF203 - fail early
+                raise RuntimeError(
+                    f"Пак '{pack.pack_id}' ссылается на неизвестную карту '{card_id}'."
+                ) from exc
+    return default_pack or packs[0].pack_id
+
+
+def ensure_mini_game_commands(app: BotApp) -> None:
+    reserved = {"start", "help", "drop", "profile", "collection", "cooldown", "games"}
+    seen: set[str] = set()
+
+    def _check(command: str, game: MiniGame) -> None:
+        cmd = command.lstrip("/").lower()
+        if not cmd:
+            raise RuntimeError(f"Мини-игра '{game.game_id}' содержит пустую команду.")
+        if cmd in reserved:
+            raise RuntimeError(f"Команда мини-игры '/{cmd}' конфликтует с системной командой.")
+        if cmd in seen:
+            raise RuntimeError(f"Команда '/{cmd}' используется несколькими мини-играми.")
+        seen.add(cmd)
+
+    for game in app.mini_games.all():
+        if game.command:
+            _check(game.command, game)
+        for alias in game.aliases:
+            _check(alias, game)
+
+
+def render_games_list(app: BotApp) -> str:
+    games = app.mini_games.all()
+    if not games:
+        return "Мини-игры пока недоступны."
+    lines = ["🎮 Доступные мини-игры:"]
+    for game in games:
+        cmd = ""
+        if game.command:
+            cmd = f"/{game.command}"
+            if game.aliases:
+                alias_part = ", ".join(f"/{alias}" for alias in game.aliases)
+                cmd = f"{cmd} ({alias_part})"
+        lines.append(f"• {game.name}{' — ' + cmd if cmd else ''}")
+        if game.description:
+            lines.append(f"  {game.description}")
+    lines.append("")
+    lines.append("Запусти мини-игру командой или нажми на кнопку внизу.")
+    return "\n".join(lines)
+
+
+def render_help_message(default_pack: str | None) -> str:
+    lines = [
+        "Привет! Этот бот демонстрирует CardForge.",
+        "",
+        "Команды:",
+        "• /drop — получить карту",
+        "• /profile — посмотреть баланс и опыт",
+        "• /collection — открыть коллекцию",
+        "• /games — список мини-игр",
+        "• /cooldown — узнать, когда доступен следующий дроп",
+        "• /help — показать это сообщение",
+    ]
+    if default_pack:
+        lines.append(f"• /drop {default_pack} — открыть пак {default_pack}")
+    lines.append("")
+    lines.append("Используй кнопки под сообщениями для быстрого доступа к действиям.")
+    return "\n".join(lines)
 
 
 def extract_pack_id(text: str | None, default_pack: str | None, packs: Iterable) -> str | None:
@@ -188,11 +281,7 @@ def format_profile_message(profile: PlayerProfile, cooldown: int) -> str:
         lines.append("💰 Баланс пуст.")
 
     lines.append("")
-    lines.append(
-        "⏱️ Кулдаун: активен"
-        if cooldown > 0
-        else "⏱️ Кулдаун отсутствует"
-    )
+    lines.append("⏱️ Кулдаун: активен" if cooldown > 0 else "⏱️ Кулдаун отсутствует")
     if cooldown > 0:
         lines.append(f"   Осталось {cooldown} сек.")
 

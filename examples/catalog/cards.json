@@ -1,62 +1,76 @@
 {
   "currencies": [
-    {
-      "code": "coins",
-      "name": "Coins"
-    },
-    {
-      "code": "gems",
-      "name": "Gems"
-    }
+    {"code": "coins", "name": "Coins"},
+    {"code": "gems", "name": "Gems"}
   ],
   "cards": [
     {
       "id": "warrior",
       "name": "Воин",
-      "description": "Классический герой ближнего боя.",
+      "description": "Боец ближнего боя, надёжный в любой стычке.",
       "rarity": "common",
-      "weight": 0.6,
-      "reward": {
-        "currencies": {
-          "coins": 5
-        },
-        "experience": 3
-      },
+      "weight": 1.0,
+      "reward": {"currencies": {"coins": 6}, "experience": 2},
       "image": {
-        "url": "https://example.com/images/warrior.png",
-        "caption": "Иллюстрация воина"
+        "url": "https://images.unsplash.com/photo-1522778526097-7ab9790d08ab?auto=format&fit=crop&w=800&q=80",
+        "caption": "Храбрый воин"
       },
-      "tags": ["starter"]
+      "tags": ["starter", "melee"]
     },
     {
       "id": "mage",
       "name": "Маг",
-      "description": "Управляет стихиями и контролирует поле боя.",
+      "description": "Контролирует стихии и разносит врагов заклинаниями.",
       "rarity": "rare",
-      "weight": 1.4,
-      "reward": {
-        "currencies": {
-          "coins": 12,
-          "gems": 1
-        },
-        "experience": 7
-      },
+      "weight": 0.7,
+      "reward": {"currencies": {"coins": 10, "gems": 1}, "experience": 6},
       "image": {
-        "url": "https://example.com/images/mage.png"
-      }
+        "url": "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=800&q=80"
+      },
+      "tags": ["starter", "magic"]
+    },
+    {
+      "id": "ranger",
+      "name": "Следопыт",
+      "description": "Меткий стрелок, чувствует себя как дома в лесу.",
+      "rarity": "uncommon",
+      "weight": 0.9,
+      "reward": {"currencies": {"coins": 8}, "experience": 4},
+      "image": {
+        "url": "https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=800&q=80"
+      },
+      "tags": ["range"]
+    },
+    {
+      "id": "paladin",
+      "name": "Паладин",
+      "description": "Святой рыцарь, защищающий союзников.",
+      "rarity": "epic",
+      "weight": 0.35,
+      "reward": {"currencies": {"coins": 18, "gems": 3}, "experience": 12},
+      "image": {
+        "url": "https://images.unsplash.com/photo-1558980664-10ea0265f2f5?auto=format&fit=crop&w=800&q=80"
+      },
+      "tags": ["support"]
     }
   ],
   "packs": [
     {
       "id": "starters",
       "name": "Стартовый набор",
-      "cards": ["warrior", "mage"],
-      "allowDuplicates": false,
+      "cards": ["warrior", "mage", "ranger"],
+      "allowDuplicates": true,
       "maxPerRoll": 1,
-      "cardWeights": {
-        "warrior": 1.0,
-        "mage": 2.0
-      }
+      "cardWeights": {"warrior": 1.0, "mage": 0.7, "ranger": 0.9}
+    },
+    {
+      "id": "champions",
+      "name": "Набор героев",
+      "cards": ["mage", "paladin"],
+      "allowDuplicates": true,
+      "maxPerRoll": 1,
+      "rarityWeights": {"epic": 0.4, "rare": 1.0}
     }
   ]
 }
+
