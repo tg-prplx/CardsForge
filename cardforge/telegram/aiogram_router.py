@@ -96,7 +96,20 @@ def build_router(app: BotApp, *, default_pack: str | None = None) -> Router:
         if not user:
             return
         profile = await players.fetch(user.id)
-        await message.answer(format_collection_message(profile, app.cards.catalog.iter_cards()))
+        await message.answer(
+            format_collection_message(profile.inventory, app.cards.catalog.iter_cards())
+        )
+
+    @router.callback_query(lambda c: c.data == "cardforge:collection")
+    async def handle_collection_callback(callback: CallbackQuery) -> None:
+        user = callback.from_user
+        if not user:
+            return
+        profile = await players.fetch(user.id)
+        await callback.answer()
+        await callback.message.answer(
+            format_collection_message(profile.inventory, app.cards.catalog.iter_cards())
+        )
 
     @router.message(Command("cooldown"))
     async def handle_cooldown(message: Message) -> None:
