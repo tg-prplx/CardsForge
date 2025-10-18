@@ -90,6 +90,9 @@ def run_validate() -> None:
 
 
 def _load_module(path: str, app: BotApp) -> None:
+    cwd = str(Path.cwd())
+    if cwd not in sys.path:
+        sys.path.insert(0, cwd)
     module = importlib.import_module(path)
     if hasattr(module, "register"):
         module.register(app)
