@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 
 from cardforge.app import BotApp
@@ -121,3 +123,14 @@ async def test_duplicate_strategy_custom_reward():
     profile = await app.player_service.fetch(1)
     assert outcome.duplicates[0].card_id == "unique"
     assert profile.wallet.get("dust") == 5
+
+
+@pytest.mark.asyncio()
+async def test_cooldown_remaining_handles_naive_timestamp(app):
+    app.config.drop.base_cooldown_seconds = 5
+    record = await app.player_store.get_or_create(42)
+    record.last_drop_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=10)
+    await app.player_store.save(record)
+
+    remaining = await app.inventory_service.cooldown_remaining(42)
+    assert remaining == 0

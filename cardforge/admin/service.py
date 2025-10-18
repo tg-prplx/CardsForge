@@ -76,13 +76,22 @@ class AdminService:
 
     async def set_cooldown(self, user_id: int, timestamp: datetime | None) -> None:
         record = await self._player_store.get_or_create(user_id)
-        record.last_drop_at = timestamp
+        normalized_timestamp = timestamp
+        if normalized_timestamp:
+            if (
+                normalized_timestamp.tzinfo is None
+                or normalized_timestamp.tzinfo.utcoffset(normalized_timestamp) is None
+            ):
+                normalized_timestamp = normalized_timestamp.replace(tzinfo=timezone.utc)
+            else:
+                normalized_timestamp = normalized_timestamp.astimezone(timezone.utc)
+        record.last_drop_at = normalized_timestamp
         await self._player_store.save(record)
         await self._audit(
             "set_cooldown",
             {
                 "user_id": user_id,
-                "timestamp": timestamp.isoformat() if timestamp else None,
+                "timestamp": normalized_timestamp.isoformat() if normalized_timestamp else None,
             },
         )
 

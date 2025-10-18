@@ -6,6 +6,7 @@ from aiogram.types import Message
 
 from ..app import BotApp
 from ..domain.player import PlayerProfile
+from .api_utils import safe_message_answer, safe_message_answer_dice
 
 
 class TelegramMiniGameContext:
@@ -18,7 +19,7 @@ class TelegramMiniGameContext:
         self.username = username
 
     async def send_message(self, text: str) -> None:
-        await self._message.answer(text)
+        await safe_message_answer(self._message, text)
 
     async def award_currency(self, currency: str, amount: int) -> PlayerProfile:
         profile = await self._app.player_service.credit(self.user_id, currency, amount)
@@ -39,11 +40,11 @@ class TelegramMiniGameContext:
     async def get_profile(self) -> PlayerProfile:
         return await self._app.player_service.fetch(self.user_id)
 
-    async def send_dice(self, emoji: str = "🎲") -> Message:
+    async def send_dice(self, emoji: str = "🎲") -> Message | None:
         """Send a dice with the given emoji and return the Telegram message."""
-        return await self._message.answer_dice(emoji=emoji)
+        return await safe_message_answer_dice(self._message, emoji=emoji)
 
     async def roll_dice(self, emoji: str = "🎲") -> int:
         """Send a dice and return its rolled value (0 if unavailable)."""
         message = await self.send_dice(emoji=emoji)
-        return message.dice.value if message.dice else 0
+        return message.dice.value if message and message.dice else 0

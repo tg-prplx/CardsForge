@@ -174,7 +174,18 @@ class InventoryService:
     def _cooldown_remaining(self, record: PlayerRecord, now: datetime) -> int:
         if not record.last_drop_at:
             return 0
-        delta = now - record.last_drop_at
+        last_drop_at = record.last_drop_at
+        if last_drop_at.tzinfo is None or last_drop_at.tzinfo.utcoffset(last_drop_at) is None:
+            last_drop_at = last_drop_at.replace(tzinfo=timezone.utc)
+        else:
+            last_drop_at = last_drop_at.astimezone(timezone.utc)
+
+        if now.tzinfo is None or now.tzinfo.utcoffset(now) is None:
+            now = now.replace(tzinfo=timezone.utc)
+        else:
+            now = now.astimezone(timezone.utc)
+
+        delta = now - last_drop_at
         remaining = self._drop.base_cooldown_seconds - int(delta.total_seconds())
         return max(0, remaining)
 

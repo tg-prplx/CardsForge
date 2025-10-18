@@ -14,6 +14,11 @@ from ..domain.cards import Card
 from ..domain.exceptions import CooldownActive, NoCardsAvailable, PlayerBanned
 from ..registry import MiniGame
 from ..telegram.keyboards import card_drop_keyboard, welcome_keyboard
+from .api_utils import (
+    safe_callback_answer,
+    safe_message_answer,
+    safe_message_edit_text,
+)
 from .minigames import TelegramMiniGameContext
 
 
@@ -27,14 +32,16 @@ def build_router(app: BotApp, *, default_pack: str | None = None) -> Router:
 
     @router.message(Command("start"))
     async def handle_start(message: Message) -> None:
-        await message.answer(
+        await safe_message_answer(
+            message,
             render_help_message(resolved_pack),
             reply_markup=welcome_keyboard(resolved_pack),
         )
 
     @router.message(Command("help"))
     async def handle_help(message: Message) -> None:
-        await message.answer(
+        await safe_message_answer(
+            message,
             render_help_message(resolved_pack),
             reply_markup=welcome_keyboard(resolved_pack),
         )
@@ -45,7 +52,7 @@ def build_router(app: BotApp, *, default_pack: str | None = None) -> Router:
             f"• {pack.pack_id}: {pack.name} ({len(pack.cards)} карт)"
             for pack in app.cards.catalog.iter_packs()
         ]
-        await message.answer("\n".join(pack_lines) or "Доступных паков пока нет.")
+        await safe_message_answer(message, "\n".join(pack_lines) or "Доступных паков пока нет.")
 
     @router.message(Command("drop"))
     async def handle_drop(message: Message) -> None:
@@ -54,20 +61,33 @@ def build_router(app: BotApp, *, default_pack: str | None = None) -> Router:
             return
         pack_id = extract_pack_id(message.text, resolved_pack, app.cards.catalog.iter_packs())
         if not pack_id:
-            await message.answer("Пак не найден. Используй /packs, чтобы узнать доступные пакеты.")
+            await safe_message_answer(
+                message,
+                "Пак не найден. Используй /packs, чтобы узнать доступные пакеты.",
+            )
             return
         try:
             outcome = await inventory.drop_from_pack(user.id, pack_id, username=user.username)
         except CooldownActive as cooldown:
-            await message.answer(f"Подожди ещё {cooldown.seconds_remaining} сек. до следующего дропа.")
+            await safe_message_answer(
+                message,
+                f"Подожди ещё {cooldown.seconds_remaining} сек. до следующего дропа.",
+            )
             return
         except PlayerBanned:
-            await message.answer("Вы заблокированы и не можете получать карты.")
+            await safe_message_answer(
+                message,
+                "Вы заблокированы и не можете получать карты.",
+            )
             return
         except NoCardsAvailable:
-            await message.answer("В этом паке закончились доступные карты.")
+            await safe_message_answer(
+                message,
+                "В этом паке закончились доступные карты.",
+            )
             return
-        await message.answer(
+        await safe_message_answer(
+            message,
             format_drop_message(outcome.cards, outcome.reward, outcome.duplicates),
             reply_markup=card_drop_keyboard(pack_id),
         )
@@ -81,16 +101,35 @@ def build_router(app: BotApp, *, default_pack: str | None = None) -> Router:
         try:
             outcome = await inventory.drop_from_pack(user.id, pack_id, username=user.username)
         except CooldownActive as cooldown:
-            await callback.answer(f"Подожди {cooldown.seconds_remaining} сек.", show_alert=True)
+            await safe_callback_answer(
+                callback,
+                f"Подожди {cooldown.seconds_remaining} сек.",
+                show_alert=True,
+            )
             return
         except PlayerBanned:
-            await callback.answer("Вы заблокированы.", show_alert=True)
+            await safe_callback_answer(callback, "Вы заблокированы.", show_alert=True)
             return
-        await callback.message.edit_text(
-            format_drop_message(outcome.cards, outcome.reward, outcome.duplicates),
+        except NoCardsAvailable:
+            await safe_callback_answer(
+                callback,
+                "В этом паке закончились доступные карты.",
+                show_alert=True,
+            )
+            return
+        drop_text = format_drop_message(outcome.cards, outcome.reward, outcome.duplicates)
+        updated = await safe_message_edit_text(
+            callback.message,
+            drop_text,
             reply_markup=card_drop_keyboard(pack_id),
         )
-        await callback.answer()
+        if not updated:
+            await safe_message_answer(
+                callback.message,
+                drop_text,
+                reply_markup=card_drop_keyboard(pack_id),
+            )
+        await safe_callback_answer(callback)
 
     @router.message(Command("profile"))
     async def handle_profile(message: Message) -> None:
@@ -99,7 +138,7 @@ def build_router(app: BotApp, *, default_pack: str | None = None) -> Router:
             return
         profile = await players.fetch(user.id)
         cooldown = await inventory.cooldown_remaining(user.id)
-        await message.answer(format_profile_message(profile, cooldown))
+        await safe_message_answer(message, format_profile_message(profile, cooldown))
 
     @router.message(Command("collection"))
     async def handle_collection(message: Message) -> None:
@@ -107,7 +146,8 @@ def build_router(app: BotApp, *, default_pack: str | None = None) -> Router:
         if not user:
             return
         profile = await players.fetch(user.id)
-        await message.answer(
+        await safe_message_answer(
+            message,
             format_collection_message(profile.inventory, app.cards.catalog.iter_cards())
         )
 
@@ -117,15 +157,17 @@ def build_router(app: BotApp, *, default_pack: str | None = None) -> Router:
         if not user:
             return
         profile = await players.fetch(user.id)
-        await callback.answer()
-        await callback.message.answer(
+        await safe_callback_answer(callback)
+        await safe_message_answer(
+            callback.message,
             format_collection_message(profile.inventory, app.cards.catalog.iter_cards())
         )
 
     @router.callback_query(lambda c: c.data == "cardforge:help")
     async def handle_help_callback(callback: CallbackQuery) -> None:
-        await callback.answer()
-        await callback.message.answer(
+        await safe_callback_answer(callback)
+        await safe_message_answer(
+            callback.message,
             render_help_message(resolved_pack),
             reply_markup=welcome_keyboard(resolved_pack),
         )
@@ -137,18 +179,18 @@ def build_router(app: BotApp, *, default_pack: str | None = None) -> Router:
             return
         remaining = await inventory.cooldown_remaining(user.id)
         if remaining > 0:
-            await message.answer(f"До следующего дропа осталось {remaining} сек.")
+            await safe_message_answer(message, f"До следующего дропа осталось {remaining} сек.")
         else:
-            await message.answer("Кулдаун не активен — можно открывать пак!")
+            await safe_message_answer(message, "Кулдаун не активен — можно открывать пак!")
 
     @router.message(Command("games"))
     async def handle_games(message: Message) -> None:
-        await message.answer(render_games_list(app))
+        await safe_message_answer(message, render_games_list(app))
 
     @router.callback_query(lambda c: c.data == "cardforge:games")
     async def handle_games_callback(callback: CallbackQuery) -> None:
-        await callback.answer()
-        await callback.message.answer(render_games_list(app))
+        await safe_callback_answer(callback)
+        await safe_message_answer(callback.message, render_games_list(app))
 
     _register_mini_game_handlers(router, app)
 
@@ -323,7 +365,10 @@ def _register_mini_game_handlers(router: Router, app: BotApp) -> None:
             if not user:
                 return
             if await app.inventory_service.is_banned(user.id):
-                await message.answer("Вы заблокированы и не можете использовать мини-игры.")
+                await safe_message_answer(
+                    message,
+                    "Вы заблокированы и не можете использовать мини-игры.",
+                )
                 return
             context = TelegramMiniGameContext(
                 app,
