@@ -26,7 +26,11 @@ dev = ["pytest>=7.4", "pytest-asyncio>=0.21", "faker>=19.0"]
 cardforge-sim = "cardforge.cli:run_simulator"
 cardforge-check = "cardforge.cli:run_checklist"
 cardforge-validate = "cardforge.cli:run_validate"
-cardforge-studio = "cardforge.studio:run_studio"
+cardforge-studio = "cardforge.studio.main:run_studio"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.setuptools.packages.find]
+include = ["cardforge*"]
+exclude = ["tests*", "examples*", "local_bot*"]

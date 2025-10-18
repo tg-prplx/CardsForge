@@ -1,3 +1,5 @@
 [console_scripts]
 cardforge-check = cardforge.cli:run_checklist
 cardforge-sim = cardforge.cli:run_simulator
+cardforge-studio = cardforge.studio.main:run_studio
+cardforge-validate = cardforge.cli:run_validate
